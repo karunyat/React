@@ -1,11 +1,14 @@
 import React, { Component } from "react";
 
-import Aux from "../../hoc/Auxialry";
+import Aux from "../../hoc/Auxilary/Auxialry";
 import Burger from "../../components/Burger/Burger";
 import BuildControls from "../../components/Burger/BuildControls/BuildControls";
 import Modal from '../../components/UI/Modal/Modal';
-import OrderSummary from "../../components/Burger/OrderSummary/OrderSummary";
 
+import OrderSummary from "../../components/Burger/OrderSummary/OrderSummary";
+import Spinner from "../../components/UI/Spinner/Spinner";
+import withErrorHandler from "../../hoc/withErrorHandler/withErrorHandler";
+import axios from '../../axios-orders';
 
 
 const INGREDIENT_PRICES={
@@ -14,7 +17,7 @@ const INGREDIENT_PRICES={
   meat:1.3,
   bacon:0.7
 
-};
+ };
 
 class BurgerBuilder extends Component {
 //   constructor (rops){
@@ -22,17 +25,22 @@ class BurgerBuilder extends Component {
 // this.state={...}
 //   }
   state={
-ingredients:{
-  salad:0,
-  bacon:0,
-  cheese:0,
-  meat:0
-},
+       ingredients:null,
 totalPrice:4,
 purchasable:false,
- purchasing:false
+ purchasing:false,
+ loading:false,
+ error:false
   }
-
+componentDidMount(){
+  axios.get('https://react-burger-72a67-default-rtdb.firebaseio.com/ingredients.json')
+  .then(response=>{
+    this.setState({ingredients:response.data});
+  })
+  .catch (error=>{
+    this.setState({error:true})
+  })
+}
   updatePurchaseState(ingredients){
     
     const sum=Object.keys(ingredients)
@@ -86,6 +94,38 @@ this.updatePurchaseState(updatedIngredients);
     this.setState({purchasing:true});
   }
   
+
+  purchaseCancleHandler=()=>{
+this.setState({purchasing:false});
+  }
+
+  purchaseContinueHandler=()=>{
+//alert('you continue!!');
+this.setState({loading:true})
+const order={
+  ingredients:this.state.ingredients,
+  price:this.state.totalPrice,
+  customer:{
+    name:'Max',
+    address:{
+      street:'phase05',
+      zipcode:'98787',
+      country:'iraq'
+    },
+    email:'max@ucev.com'
+    
+  },
+  deliveryMode:'fastest'
+}
+  axios.post('/orders.json',order)
+  .then(response=> {
+    this.setState({loading:false,purchasing:false});
+  })
+  .catch(error=>{
+    this.setState({loading:false,purchasing:false});
+  });
+
+}
   render() {
     const disableInfo={
       ...this.state.ingredients
@@ -93,25 +133,46 @@ this.updatePurchaseState(updatedIngredients);
     for (let key in disableInfo){
       disableInfo[key]=disableInfo[key]<=0
     }
+    let orderSummary=null;
+    let burger=this.state.error?<p>ingredients can't be loaded</p>:<Spinner/>;
+
+    if(this.state.ingredients){
+  burger=(
+    <Aux>
+          <Burger ingredients={this.state.ingredients}/>
+               <BuildControls
+                  ingredientAdded={this.addIngredientHandler}
+                  ingredientDeducted={this.removeIngredientHandler}
+                  disabled={disableInfo}
+                  purchasable={this.state.purchasable}
+                  ordered={this.purchaseHandler}
+                  price={this.state.totalPrice}/>
+    </Aux>);
+  orderSummary=<OrderSummary 
+  ingredients={this.state.ingredients} 
+  purchaseCanceled={this.purchaseCancleHandler}
+  purchaseContinued={this.purchaseContinueHandler}
+  price={this.state.totalPrice}
+  /> 
+}
+if(this.state.loading){
+  orderSummary=<Spinner/>;
+      }
+    
     return (
       <Aux>
         <Modal 
-         show={this.state.purchasing}>
-        <OrderSummary ingredients={this.state.ingredients} />
+         show={this.state.purchasing}
+         modalClosed={this.purchaseCancleHandler}
+         >
+        {orderSummary}
         </Modal>
-        
-         <Burger ingredients={this.state.ingredients}/>
-         <BuildControls
-         ingredientAdded={this.addIngredientHandler}
-         ingredientDeducted={this.removeIngredientHandler}
-         disabled={disableInfo}
-        purchasable={this.state.purchasable}
-        ordered={this.purchaseHandler}
-         price={this.state.totalPrice}/>
-        
+        {burger}
+         
       </Aux>
     );
   }
 }
 
-export default BurgerBuilder;
+export default withErrorHandler(BurgerBuilder,axios);
+
